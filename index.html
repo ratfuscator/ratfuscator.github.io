@@ -17,13 +17,14 @@
       <section class="panel">
         <header class="panel-header">
           <h1>Ratfuscator</h1>
-          <p>Smooth text obfuscator for classic <code>.txt</code> and <code>.lua</code>.</p>
+          <p>Smooth text obfuscator for classic <code>.txt</code>, <code>.lua</code>, and <code>.rat</code>.</p>
         </header>
 
         <label class="menu-label" for="language">Language preset</label>
         <select id="language" class="menu-select" aria-label="Select obfuscation language preset">
           <option value="txt">Classic .txt</option>
           <option value="lua">.lua</option>
+          <option value="rat">Rattify .rat</option>
         </select>
 
         <div class="editor-grid">
@@ -37,6 +38,19 @@
         </div>
       </section>
     </main>
+
+    <aside class="docs-widget" aria-live="polite">
+      <button id="docsToggle" class="docs-toggle" type="button" aria-expanded="false" aria-controls="docsPanel">
+        Docs
+      </button>
+      <div id="docsPanel" class="docs-panel" hidden>
+        <h2>Ratfuscator Docs</h2>
+        <p>
+          We use our <strong>OWN</strong> language named <strong>Rattify</strong> with extension
+          <code>.rat</code>. It turns your text unreadable, but readable through our machines.
+        </p>
+      </div>
+    </aside>
 
     <script src="script.js"></script>
   </body>
