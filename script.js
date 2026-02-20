@@ -11,29 +11,8 @@ const deobOutput = document.getElementById('deobOutput');
 const deobfuscateBtn = document.getElementById('deobfuscateBtn');
 
 const DEOBFUSCATOR_PASSWORD = 'rattify';
-
-const leetMap = {
-  a: '4',
-  e: '3',
-  i: '1',
-  o: '0',
-  s: '5',
-  t: '7',
-  l: '1',
-};
-
-const specialGlyphMap = {
-  a: '@',
-  c: '(',
-  h: '#',
-  k: '|<',
-  m: '/\\/',
-  n: '^',
-  r: '®',
-  y: '`',
-};
-
 const SIGNAL_TOKEN = "`329`;;\n''";
+
 const PRESET_MAP = {
   '766$%': 'a',
   '99!rt': 'e',
@@ -42,8 +21,116 @@ const PRESET_MAP = {
   '5!gnl': 'u',
 };
 
+const REVERSE_PRESET_MAP = Object.fromEntries(Object.entries(PRESET_MAP).map(([k, v]) => [v, k]));
+
+const LEET_ENCODE_MAP = {
+  a: '4',
+  b: '8',
+  e: '3',
+  g: '9',
+  i: '1',
+  l: '|',
+  o: '0',
+  s: '5',
+  t: '7',
+  z: '2',
+};
+
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function randomDigits(length) {
+  return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
+}
+
+function randomChars(length) {
+  const chars = '&@#$%*!?;:+-|~^';
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function randomRatToken() {
+  return randomFrom(['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT', 'RatTT']);
+}
+
+function toBase64(value) {
+  return btoa(unescape(encodeURIComponent(value)));
+}
+
+function fromBase64(value) {
+  return decodeURIComponent(escape(atob(value)));
+}
+
+function rotateByPreset(text, preset, invert = false) {
+  const shiftSource = preset.charCodeAt(0) + preset.charCodeAt(preset.length - 1);
+  const shift = (shiftSource % 9) + 3;
+
+  return [...text]
+    .map((char, idx) => {
+      const code = char.charCodeAt(0);
+      const delta = shift + (idx % 5);
+      const next = invert ? code - delta : code + delta;
+      return String.fromCharCode(next);
+    })
+    .join('');
+}
+
+function byteSwap(text, preset, invert = false) {
+  const key = [...preset].reduce((acc, ch, idx) => acc + ch.charCodeAt(0) * (idx + 3), 0) % 251;
+
+  return [...text]
+    .map((char, idx) => {
+      const raw = char.charCodeAt(0);
+      const salted = invert ? raw - ((key + idx * 7) % 256) : raw + ((key + idx * 7) % 256);
+      const safe = ((salted % 65535) + 65535) % 65535;
+      return String.fromCharCode(safe);
+    })
+    .join('');
+}
+
+function encodeLetterAsCluster(char, idx, preset) {
+  const lower = char.toLowerCase();
+  const marker = REVERSE_PRESET_MAP[lower] || randomFrom(Object.keys(PRESET_MAP));
+  const leet = LEET_ENCODE_MAP[lower] || lower;
+  const noiseA = randomChars(1);
+  const noiseB = randomDigits(2);
+  const rat = randomRatToken();
+
+  return `${rat}{${idx.toString(36)}:${leet}${SIGNAL_TOKEN}${marker}${noiseA}${noiseB}}`;
+}
+
+function transformForLayer(source, preset) {
+  const words = source.split(/\s+/).filter(Boolean);
+
+  return words
+    .map((word, wordIndex) => {
+      const encoded = [...word]
+        .map((char, idx) => {
+          if (/^[a-zA-Z]$/.test(char)) {
+            return encodeLetterAsCluster(char, idx + wordIndex, preset);
+          }
+          return `${randomRatToken()}[${char.charCodeAt(0).toString(16)}${randomChars(1)}]`;
+        })
+        .join('');
+
+      return `${encoded}${randomRatToken()}${randomDigits(3)}`;
+    })
+    .join(randomFrom(['||', '::', '~~']));
+}
+
+function deTokenizeLayered(value) {
+  return value
+    .replace(/(RatTT|Rat|RAT|rat|rAt|RaT|RAt|raT)/g, '')
+    .replace(/\|\||::|~~/g, '')
+    .replace(/\{[0-9a-z]+:([^{}]+?)`329`;;\n''([A-Za-z0-9!#$%]+)[^{}]*\}/g, (_, encodedLetter, marker) => {
+      if (PRESET_MAP[marker]) {
+        return encodedLetter;
+      }
+      return randomFrom(['x', 'q', 'z', 'v']);
+    })
+    .replace(/\[[0-9a-f]+[^\]]?\]/g, '')
+    .replace(/[0-9]{3}/g, ' ')
+    .trim();
 }
 
 function obfuscateTxt(value) {
@@ -52,7 +139,7 @@ function obfuscateTxt(value) {
   }
 
   const salt = Math.floor(Math.random() * 30) + 11;
-  const parts = [...value].map((char, idx) => ((char.charCodeAt(0) + salt + idx) ^ (salt % 7)).toString(36));
+  const parts = [...value].map((char, idx) => ((char.charCodeAt(0) + salt + idx * 2) ^ (salt % 7)).toString(36));
   return `txt:${salt}:${parts.join('.')}`;
 }
 
@@ -62,7 +149,7 @@ function obfuscateLua(value) {
   }
 
   const escaped = [...value]
-    .map((char, idx) => `\\${(char.charCodeAt(0) + (idx % 10)).toString().padStart(3, '0')}`)
+    .map((char, idx) => `\\${(char.charCodeAt(0) + (idx % 10) + 3).toString().padStart(3, '0')}`)
     .join('');
 
   return `loadstring("${escaped}")()`;
@@ -84,80 +171,24 @@ function obfuscateRattify(value) {
   return `rat:${seed}:${payload}`;
 }
 
-function randomChars(length) {
-  const chars = '&@#$%*!?;:+-|~^';
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
-function randomDigits(length) {
-  return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
-}
-
-function randomRatToken() {
-  return randomFrom(['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT', 'RatTT']);
-}
-
-function mutateWord(word) {
-  const lettersOnly = word.replace(/[^a-zA-Z]/g, '');
-  if (!lettersOnly) {
-    return randomRatToken();
-  }
-
-  return [...lettersOnly]
-    .map((char, idx) => {
-      const lower = char.toLowerCase();
-
-      if (Math.random() < 0.17) {
-        return SIGNAL_TOKEN;
-      }
-
-      if (leetMap[lower] && Math.random() < 0.33) {
-        return leetMap[lower];
-      }
-
-      if (specialGlyphMap[lower] && Math.random() < 0.25) {
-        return specialGlyphMap[lower];
-      }
-
-      if (idx % 2 === 0 && Math.random() < 0.6) {
-        return lower.toUpperCase();
-      }
-
-      return lower;
-    })
-    .join('');
-}
-
-function applyPresetSignal(text, preset) {
-  const replacement = PRESET_MAP[preset] || randomFrom(['x', 'q', 'z', 'v']);
-  return text.split(SIGNAL_TOKEN).join(replacement);
-}
-
 function layerOfObfuscation(source, baseValue) {
   if (!source) {
     return '';
   }
 
-  const words = source.trim().split(/\s+/).filter(Boolean);
   const preset = randomFrom(Object.keys(PRESET_MAP).concat(['??!x9', 'rat404', 'mix777']));
+  const transformedSource = transformForLayer(source, preset);
+  const merged = `${baseValue}||${transformedSource}`;
+  const rotated = rotateByPreset(merged, preset);
+  const swapped = byteSwap(rotated, preset);
+  const packed = toBase64(swapped).replace(/=+$/g, '');
+  const shards = packed.match(/.{1,8}/g) || [];
 
-  const ratWords = words
-    .map((word, idx) => {
-      const chunk = `${randomRatToken()}${mutateWord(word)}${randomDigits(2)}${randomChars(2)}`;
-      return idx % 2 === 0 ? chunk.toUpperCase() : chunk;
-    })
-    .join('');
+  const noisy = shards
+    .map((chunk, idx) => `${randomRatToken()}[${idx.toString(36)}|${chunk}]${randomChars(1)}${randomDigits(1)}`)
+    .join(randomFrom(['#', ';', ':']));
 
-  const baseEncoded = btoa(unescape(encodeURIComponent(baseValue))).replace(/=+$/g, '');
-  const maskedBase = [...baseEncoded]
-    .map((char, idx) => (idx % 3 === 0 ? char.toUpperCase() : char))
-    .join('');
-
-  const withSignal = `${ratWords}${SIGNAL_TOKEN}${maskedBase.slice(0, 18)}${randomRatToken()}`;
-  const signalResolved = applyPresetSignal(withSignal, preset);
-  const noisyPrefix = `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}rat${randomRatToken()}`;
-
-  return `${noisyPrefix}${signalResolved}${randomChars(3)}${randomDigits(3)}::preset:${preset}`;
+  return `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}${noisy}${randomChars(2)}::preset:${preset}`;
 }
 
 function runSelectedObfuscation(value, selectedLanguage) {
@@ -172,29 +203,51 @@ function runSelectedObfuscation(value, selectedLanguage) {
   return obfuscateTxt(value);
 }
 
+function normalizeLeet(text) {
+  const reverseLeet = Object.fromEntries(Object.entries(LEET_ENCODE_MAP).map(([k, v]) => [v, k]));
+  return [...text]
+    .map((char) => reverseLeet[char] || char)
+    .join('');
+}
+
 function deobfuscateRatOutput(value) {
   if (!value || !value.startsWith('rat:')) {
     return 'Invalid format: expected rat: output.';
   }
 
   const presetMatch = value.match(/::preset:([^\s]+)$/);
-  const preset = presetMatch ? presetMatch[1] : 'unknown';
-  const withoutPreset = value.replace(/::preset:[^\s]+$/, '');
-
-  const tailCandidate = withoutPreset.slice(-35);
-  const cleanedTail = tailCandidate.replace(/[^A-Za-z0-9+/=]/g, '');
-
-  let decodedHint = 'Could not decode hidden payload segment.';
-  if (cleanedTail.length >= 8) {
-    try {
-      const padded = cleanedTail + '='.repeat((4 - (cleanedTail.length % 4)) % 4);
-      decodedHint = decodeURIComponent(escape(atob(padded.slice(0, 24))));
-    } catch (error) {
-      decodedHint = 'Payload segment exists but is too noisy to fully decode.';
-    }
+  if (!presetMatch) {
+    return 'Invalid format: missing preset.';
   }
 
-  return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered hint: ${decodedHint}`;
+  const preset = presetMatch[1];
+  const payload = value.replace(/^rat:[^\n]*?((?:RatTT|Rat|RAT|rat|rAt|RaT|RAt|raT)\[)/, '$1').replace(/::preset:[^\s]+$/, '');
+  const chunks = [...payload.matchAll(/\[(?:[0-9a-z]+)\|([A-Za-z0-9+/]+)\]/g)].map((m) => m[1]);
+  const baseOnly = chunks.join('');
+
+  if (!baseOnly) {
+    return 'Invalid format: missing encoded payload.';
+  }
+
+  try {
+    const padded = baseOnly + '='.repeat((4 - (baseOnly.length % 4)) % 4);
+    const swapped = fromBase64(padded);
+    const unSwapped = byteSwap(swapped, preset, true);
+    const unRotated = rotateByPreset(unSwapped, preset, true);
+    const parts = unRotated.split('||');
+
+    if (parts.length < 2) {
+      return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered: ${unRotated}`;
+    }
+
+    const rawSourceLayer = parts.slice(1).join('||');
+    const tokenizedLetters = deTokenizeLayered(rawSourceLayer);
+    const normalized = normalizeLeet(tokenizedLetters);
+
+    return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered source: ${normalized}\nBase payload: ${parts[0]}`;
+  } catch (error) {
+    return 'Deobfuscation failed: payload is too corrupted or not generated by this Ratfuscator version.';
+  }
 }
 
 obfuscateBtn.addEventListener('click', () => {
