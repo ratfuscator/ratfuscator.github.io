@@ -32,10 +32,23 @@
           <textarea id="inputText" placeholder="Insert text to obfuscate..."></textarea>
 
           <button id="obfuscateBtn" type="button">Obfuscate</button>
+          <button id="openDeobfuscatorBtn" type="button" aria-expanded="false" aria-controls="deobfuscatorPanel">
+            Open Deobfuscator
+          </button>
 
           <label for="outputText">Output</label>
           <textarea id="outputText" readonly placeholder="Your obfuscated result appears here."></textarea>
         </div>
+
+        <section id="deobfuscatorPanel" class="deobfuscator-panel" hidden>
+          <h2>Deobfuscator</h2>
+          <p>Locked panel. Password required: ask only trusted users.</p>
+          <label for="deobInput">Obfuscated text</label>
+          <textarea id="deobInput" placeholder="Paste obfuscated rat output here..."></textarea>
+          <button id="deobfuscateBtn" type="button">Deobfuscate</button>
+          <label for="deobOutput">Deobfuscated output</label>
+          <textarea id="deobOutput" readonly placeholder="Deobfuscation result appears here."></textarea>
+        </section>
       </section>
     </main>
 
