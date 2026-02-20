@@ -5,6 +5,16 @@ const obfuscateBtn = document.getElementById('obfuscateBtn');
 const docsToggle = document.getElementById('docsToggle');
 const docsPanel = document.getElementById('docsPanel');
 
+const leetMap = {
+  a: '4',
+  e: '3',
+  i: '1',
+  o: '0',
+  s: '5',
+  t: '7',
+  l: '1',
+};
+
 function obfuscateTxt(value) {
   if (!value) {
     return '';
@@ -40,20 +50,48 @@ function obfuscateRattify(value) {
   return `rat:${seed}:${payload}`;
 }
 
-function randomChunk(length) {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+function randomChars(length) {
+  const chars = '&@#$%*!?';
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-function layerOfObfuscation(value) {
-  if (!value) {
+function randomDigits(length) {
+  return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
+}
+
+function randomRatToken() {
+  const forms = ['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT'];
+  return forms[Math.floor(Math.random() * forms.length)];
+}
+
+function mutateWord(word) {
+  const lettersOnly = word.replace(/[^a-zA-Z]/g, '');
+  if (!lettersOnly) {
+    return randomRatToken();
+  }
+
+  return [...lettersOnly]
+    .map((char) => {
+      const lower = char.toLowerCase();
+      if (leetMap[lower] && Math.random() < 0.25) {
+        return leetMap[lower];
+      }
+      return Math.random() < 0.5 ? lower : lower.toUpperCase();
+    })
+    .join('');
+}
+
+function layerOfObfuscation(source, baseValue) {
+  if (!source) {
     return '';
   }
 
-  const lead = `rtt${Math.floor(Math.random() * 900 + 100)}tgrat${Math.floor(Math.random() * 900000 + 100000)}`;
-  const mid = randomChunk(10);
-  const tail = randomChunk(9);
-  return `${lead} ${mid} ${tail} RARTTTTTT RATify ${btoa(unescape(encodeURIComponent(value)))}`;
+  const words = source.trim().split(/\s+/).filter(Boolean);
+  const ratWords = words.map((word) => `${randomRatToken()}${mutateWord(word)}`).join('');
+  const noise = `${randomChars(1)}${randomDigits(4)}${randomChars(3)}`;
+  const signature = btoa(unescape(encodeURIComponent(baseValue))).replace(/=+$/g, '').slice(0, 12);
+
+  return `rat:${noise}rat${ratWords}${randomRatToken()}${signature}`;
 }
 
 function runSelectedObfuscation(value, selectedLanguage) {
@@ -73,7 +111,7 @@ obfuscateBtn.addEventListener('click', () => {
   const selectedLanguage = languageSelect.value;
   const base = runSelectedObfuscation(source, selectedLanguage);
 
-  outputText.value = layerOfObfuscation(base);
+  outputText.value = layerOfObfuscation(source, base);
 });
 
 docsToggle.addEventListener('click', () => {
