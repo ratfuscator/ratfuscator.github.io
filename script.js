@@ -13,6 +13,18 @@ const deobfuscateBtn = document.getElementById('deobfuscateBtn');
 const PASSWORD_HASH = '4f984c7da6d8d3547204e3a4dbdc95c872919d74db9fa6c1b330e5b0437aa59a';
 const SIGNAL_TOKEN = "`329`;;\n''";
 const PRESET_KEYS = ['766$%', '99!rt', 'r7#11', '0xRAT', '5!gnl', '??!x9', 'rat404', 'mix777'];
+const DISTRACTION_WORDS = [
+  'mango',
+  'ratgear',
+  'fuzz',
+  'mask',
+  'noise',
+  'ember',
+  'shadow',
+  'drift',
+  'cipher',
+  'jam',
+];
 
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -29,6 +41,11 @@ function randomChars(length) {
 
 function randomRatToken() {
   return randomFrom(['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT', 'RatTT']);
+}
+
+function randomDistractionTag() {
+  const word = randomFrom(DISTRACTION_WORDS);
+  return `%${word}${randomDigits(2)}%`;
 }
 
 function toBase64(value) {
@@ -109,10 +126,10 @@ function layerOfObfuscation(source, baseValue) {
   const shards = packed.match(/.{1,7}/g) || [];
 
   const noisy = shards
-    .map((chunk, idx) => `${randomRatToken()}[${idx.toString(36)}|${chunk}]${SIGNAL_TOKEN}${randomChars(1)}${randomDigits(1)}`)
-    .join(randomFrom(['#', ';', ':']));
+    .map((chunk, idx) => `${randomDistractionTag()}${randomRatToken()}[${idx.toString(36)}|${chunk}]${SIGNAL_TOKEN}${randomChars(1)}${randomDigits(1)}${randomDistractionTag()}`)
+    .join(`${randomFrom(['#', ';', ':'])}${randomDistractionTag()}`);
 
-  return `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}${makePresetSeal(preset)}${noisy}${randomChars(2)}`;
+  return `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}${makePresetSeal(preset)}${randomDistractionTag()}${noisy}${randomDistractionTag()}${randomChars(2)}`;
 }
 
 function deobfuscateRatOutput(value) {
@@ -125,7 +142,8 @@ function deobfuscateRatOutput(value) {
     return 'Invalid format: missing hidden preset signature.';
   }
 
-  const chunks = [...value.matchAll(/\[(?:[0-9a-z]+)\|([A-Za-z0-9+/]+)\]/g)].map((m) => m[1]);
+  const cleanedValue = value.replace(/%[a-zA-Z0-9_-]+%/g, '');
+  const chunks = [...cleanedValue.matchAll(/\[(?:[0-9a-z]+)\|([A-Za-z0-9+/]+)\]/g)].map((m) => m[1]);
   if (!chunks.length) {
     return 'Invalid format: no payload chunks found.';
   }
