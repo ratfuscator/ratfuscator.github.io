@@ -15,13 +15,37 @@ const leetMap = {
   l: '1',
 };
 
+const specialGlyphMap = {
+  a: '@',
+  c: '(',
+  h: '#',
+  k: '|<',
+  m: '/\\/',
+  n: '^',
+  r: '®',
+  y: '`',
+};
+
+const SIGNAL_TOKEN = "`329`;;\n''";
+const PRESET_MAP = {
+  '766$%': 'a',
+  '99!rt': 'e',
+  'r7#11': 'i',
+  '0xRAT': 'o',
+  '5!gnl': 'u',
+};
+
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 function obfuscateTxt(value) {
   if (!value) {
     return '';
   }
 
   const salt = Math.floor(Math.random() * 30) + 11;
-  const parts = [...value].map((char) => (char.charCodeAt(0) + salt).toString(36));
+  const parts = [...value].map((char, idx) => ((char.charCodeAt(0) + salt + idx) ^ (salt % 7)).toString(36));
   return `txt:${salt}:${parts.join('.')}`;
 }
 
@@ -31,7 +55,7 @@ function obfuscateLua(value) {
   }
 
   const escaped = [...value]
-    .map((char) => `\\${char.charCodeAt(0).toString().padStart(3, '0')}`)
+    .map((char, idx) => `\\${(char.charCodeAt(0) + idx % 10).toString().padStart(3, '0')}`)
     .join('');
 
   return `loadstring("${escaped}")()`;
@@ -44,14 +68,17 @@ function obfuscateRattify(value) {
 
   const seed = Math.floor(Math.random() * 90) + 10;
   const payload = [...value]
-    .map((char, idx) => `${(char.charCodeAt(0) + seed + idx).toString(36)}rat`)
+    .map((char, idx) => {
+      const shifted = (char.charCodeAt(0) + seed + idx * 3) ^ (seed % 13);
+      return `${shifted.toString(36)}${randomRatToken().toLowerCase()}`;
+    })
     .join('');
 
   return `rat:${seed}:${payload}`;
 }
 
 function randomChars(length) {
-  const chars = '&@#$%*!?';
+  const chars = '&@#$%*!?;:+-|~^';
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
@@ -60,8 +87,7 @@ function randomDigits(length) {
 }
 
 function randomRatToken() {
-  const forms = ['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT'];
-  return forms[Math.floor(Math.random() * forms.length)];
+  return randomFrom(['Rat', 'RAT', 'rat', 'rAt', 'RaT', 'RAt', 'raT', 'RatTT']);
 }
 
 function mutateWord(word) {
@@ -71,14 +97,33 @@ function mutateWord(word) {
   }
 
   return [...lettersOnly]
-    .map((char) => {
+    .map((char, idx) => {
       const lower = char.toLowerCase();
-      if (leetMap[lower] && Math.random() < 0.25) {
+
+      if (Math.random() < 0.17) {
+        return SIGNAL_TOKEN;
+      }
+
+      if (leetMap[lower] && Math.random() < 0.33) {
         return leetMap[lower];
       }
-      return Math.random() < 0.5 ? lower : lower.toUpperCase();
+
+      if (specialGlyphMap[lower] && Math.random() < 0.25) {
+        return specialGlyphMap[lower];
+      }
+
+      if (idx % 2 === 0 && Math.random() < 0.6) {
+        return lower.toUpperCase();
+      }
+
+      return lower;
     })
     .join('');
+}
+
+function applyPresetSignal(text, preset) {
+  const replacement = PRESET_MAP[preset] || randomFrom(['x', 'q', 'z', 'v']);
+  return text.split(SIGNAL_TOKEN).join(replacement);
 }
 
 function layerOfObfuscation(source, baseValue) {
@@ -87,11 +132,25 @@ function layerOfObfuscation(source, baseValue) {
   }
 
   const words = source.trim().split(/\s+/).filter(Boolean);
-  const ratWords = words.map((word) => `${randomRatToken()}${mutateWord(word)}`).join('');
-  const noise = `${randomChars(1)}${randomDigits(4)}${randomChars(3)}`;
-  const signature = btoa(unescape(encodeURIComponent(baseValue))).replace(/=+$/g, '').slice(0, 12);
+  const preset = randomFrom(Object.keys(PRESET_MAP).concat(['??!x9', 'rat404', 'mix777']));
 
-  return `rat:${noise}rat${ratWords}${randomRatToken()}${signature}`;
+  const ratWords = words
+    .map((word, idx) => {
+      const chunk = `${randomRatToken()}${mutateWord(word)}${randomDigits(2)}${randomChars(2)}`;
+      return idx % 2 === 0 ? chunk.toUpperCase() : chunk;
+    })
+    .join('');
+
+  const baseEncoded = btoa(unescape(encodeURIComponent(baseValue))).replace(/=+$/g, '');
+  const maskedBase = [...baseEncoded]
+    .map((char, idx) => (idx % 3 === 0 ? char.toUpperCase() : char))
+    .join('');
+
+  const withSignal = `${ratWords}${SIGNAL_TOKEN}${maskedBase.slice(0, 18)}${randomRatToken()}`;
+  const signalResolved = applyPresetSignal(withSignal, preset);
+  const noisyPrefix = `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}rat${randomRatToken()}`;
+
+  return `${noisyPrefix}${signalResolved}${randomChars(3)}${randomDigits(3)}::preset:${preset}`;
 }
 
 function runSelectedObfuscation(value, selectedLanguage) {
