@@ -4,6 +4,13 @@ const outputText = document.getElementById('outputText');
 const obfuscateBtn = document.getElementById('obfuscateBtn');
 const docsToggle = document.getElementById('docsToggle');
 const docsPanel = document.getElementById('docsPanel');
+const openDeobfuscatorBtn = document.getElementById('openDeobfuscatorBtn');
+const deobfuscatorPanel = document.getElementById('deobfuscatorPanel');
+const deobInput = document.getElementById('deobInput');
+const deobOutput = document.getElementById('deobOutput');
+const deobfuscateBtn = document.getElementById('deobfuscateBtn');
+
+const DEOBFUSCATOR_PASSWORD = 'rattify';
 
 const leetMap = {
   a: '4',
@@ -55,7 +62,7 @@ function obfuscateLua(value) {
   }
 
   const escaped = [...value]
-    .map((char, idx) => `\\${(char.charCodeAt(0) + idx % 10).toString().padStart(3, '0')}`)
+    .map((char, idx) => `\\${(char.charCodeAt(0) + (idx % 10)).toString().padStart(3, '0')}`)
     .join('');
 
   return `loadstring("${escaped}")()`;
@@ -165,12 +172,54 @@ function runSelectedObfuscation(value, selectedLanguage) {
   return obfuscateTxt(value);
 }
 
+function deobfuscateRatOutput(value) {
+  if (!value || !value.startsWith('rat:')) {
+    return 'Invalid format: expected rat: output.';
+  }
+
+  const presetMatch = value.match(/::preset:([^\s]+)$/);
+  const preset = presetMatch ? presetMatch[1] : 'unknown';
+  const withoutPreset = value.replace(/::preset:[^\s]+$/, '');
+
+  const tailCandidate = withoutPreset.slice(-35);
+  const cleanedTail = tailCandidate.replace(/[^A-Za-z0-9+/=]/g, '');
+
+  let decodedHint = 'Could not decode hidden payload segment.';
+  if (cleanedTail.length >= 8) {
+    try {
+      const padded = cleanedTail + '='.repeat((4 - (cleanedTail.length % 4)) % 4);
+      decodedHint = decodeURIComponent(escape(atob(padded.slice(0, 24))));
+    } catch (error) {
+      decodedHint = 'Payload segment exists but is too noisy to fully decode.';
+    }
+  }
+
+  return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered hint: ${decodedHint}`;
+}
+
 obfuscateBtn.addEventListener('click', () => {
   const source = inputText.value;
   const selectedLanguage = languageSelect.value;
   const base = runSelectedObfuscation(source, selectedLanguage);
 
   outputText.value = layerOfObfuscation(source, base);
+});
+
+openDeobfuscatorBtn.addEventListener('click', () => {
+  const enteredPassword = window.prompt('Enter deobfuscator password:');
+
+  if (enteredPassword !== DEOBFUSCATOR_PASSWORD) {
+    window.alert('Access denied. Wrong password.');
+    return;
+  }
+
+  const shouldOpen = deobfuscatorPanel.hasAttribute('hidden');
+  deobfuscatorPanel.toggleAttribute('hidden', !shouldOpen);
+  openDeobfuscatorBtn.setAttribute('aria-expanded', String(shouldOpen));
+});
+
+deobfuscateBtn.addEventListener('click', () => {
+  deobOutput.value = deobfuscateRatOutput(deobInput.value.trim());
 });
 
 docsToggle.addEventListener('click', () => {
