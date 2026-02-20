@@ -32,27 +32,27 @@ const PRESET_KEYS = [
   'zeta77',
 ];
 
-const DISTRACTION_WORDS = [
-  'mango',
-  'ratgear',
-  'fuzz',
-  'mask',
-  'noise',
-  'ember',
-  'shadow',
-  'drift',
-  'cipher',
-  'jam',
-  'phantom',
-  'spark',
-  'delta',
-  'static',
-  'haze',
-  'pulse',
-  'rivet',
-  'vector',
-  'coil',
-  'matrix',
+const X4_SEED = [
+  '4a',
+  '5f',
+  '72',
+  '39',
+  '6d',
+  '2b',
+  '50',
+  '7e',
+  '41',
+  '3c',
+  '68',
+  '24',
+  '55',
+  '6a',
+  '7b',
+  '30',
+  '47',
+  '5d',
+  '2f',
+  '79',
 ];
 
 const RAT_TOKENS = [
@@ -68,7 +68,7 @@ const RAT_TOKENS = [
   'rattify',
 ];
 
-const NOISE_CHARS = '&@#$%*!?;:+-|~^';
+const NOISE_CHARS = '&@#$*!?;:+-|~^';
 
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -86,10 +86,20 @@ function randomRatToken() {
   return randomFrom(RAT_TOKENS);
 }
 
+function decodeHexSeed(hexSeed) {
+  return String.fromCharCode(parseInt(hexSeed, 16));
+}
+
+function randomJammerToken() {
+  const a = decodeHexSeed(randomFrom(X4_SEED));
+  const b = decodeHexSeed(randomFrom(X4_SEED));
+  const c = randomFrom('!@#$%^&*?+-=_~');
+  const d = randomFrom('0123456789abcdefghijklmnopqrstuvwxyz');
+  return `${a}${b}${c}${d}`;
+}
+
 function randomDistractionTag() {
-  const word = randomFrom(DISTRACTION_WORDS);
-  const num = randomDigits(2);
-  return `%${word}${num}%`;
+  return `%${randomJammerToken()}%`;
 }
 
 function toUtf8Base64(value) {
@@ -304,13 +314,13 @@ function buildShardEntries(payload) {
 }
 
 function serializeShards(entries) {
-  const separator = `${randomFrom(['#', ';', ':'])}${randomDistractionTag()}`;
+  const separator = `${randomDistractionTag()}${randomFrom(['#', ';', ':'])}${randomDistractionTag()}`;
 
   return entries
     .map((entry) => {
-      const prefix = `${randomDistractionTag()}${randomRatToken()}${randomNoise(1)}`;
+      const prefix = `${randomDistractionTag()}${randomDistractionTag()}${randomRatToken()}${randomNoise(1)}${randomDistractionTag()}`;
       const body = `[${entry.id}|${entry.chunk}|${entry.checksum}]`;
-      const suffix = `${SIGNAL_TOKEN}${randomNoise(1)}${randomDigits(1)}${randomDistractionTag()}`;
+      const suffix = `${randomDistractionTag()}${SIGNAL_TOKEN}${randomNoise(1)}${randomDigits(1)}${randomDistractionTag()}${randomDistractionTag()}`;
       return `${prefix}${body}${suffix}`;
     })
     .join(separator);
@@ -335,11 +345,11 @@ function layerOfObfuscation(source, baseValue, modeTag) {
 
   const metaToken = toUtf8Base64(JSON.stringify(meta)).replace(/=+$/g, '');
 
-  return `rat:${randomNoise(1)}${randomDigits(4)}${randomNoise(2)}${makeSealPayload(preset)}${HEADER_SPLIT}${metaToken}${HEADER_SPLIT}${randomDistractionTag()}${serialized}${randomDistractionTag()}${randomNoise(2)}`;
+  return `rat:${randomDistractionTag()}${randomNoise(1)}${randomDigits(4)}${randomNoise(2)}${makeSealPayload(preset)}${HEADER_SPLIT}${metaToken}${HEADER_SPLIT}${randomDistractionTag()}${randomDistractionTag()}${serialized}${randomDistractionTag()}${randomDistractionTag()}${randomNoise(2)}`;
 }
 
 function stripDistractions(value) {
-  return value.replace(/%[A-Za-z0-9_-]+%/g, '');
+  return value.replace(/%[^%]{4}%/g, '');
 }
 
 function parseMeta(value) {
