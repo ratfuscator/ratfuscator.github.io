@@ -12,6 +12,7 @@ const deobfuscateBtn = document.getElementById('deobfuscateBtn');
 
 const DEOBFUSCATOR_PASSWORD = 'rattify';
 const SIGNAL_TOKEN = "`329`;;\n''";
+const PRESET_KEYS = ['766$%', '99!rt', 'r7#11', '0xRAT', '5!gnl', '??!x9', 'rat404', 'mix777'];
 
 const PRESET_MAP = {
   '766$%': 'a',
@@ -88,18 +89,38 @@ function byteSwap(text, preset, invert = false) {
     .join('');
 }
 
-function encodeLetterAsCluster(char, idx, preset) {
-  const lower = char.toLowerCase();
-  const marker = REVERSE_PRESET_MAP[lower] || randomFrom(Object.keys(PRESET_MAP));
-  const leet = LEET_ENCODE_MAP[lower] || lower;
-  const noiseA = randomChars(1);
-  const noiseB = randomDigits(2);
-  const rat = randomRatToken();
-
-  return `${rat}{${idx.toString(36)}:${leet}${SIGNAL_TOKEN}${marker}${noiseA}${noiseB}}`;
+function makePresetSeal(preset) {
+  const scrambled = rotateByPreset(preset, '99!rt');
+  const packed = toBase64(scrambled).replace(/=+$/g, '');
+  return `<${packed}>`;
 }
 
-function transformForLayer(source, preset) {
+function readPresetSeal(value) {
+  const match = value.match(/<([A-Za-z0-9+/]+)>/);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const encoded = match[1];
+    const padded = encoded + '='.repeat((4 - (encoded.length % 4)) % 4);
+    const unpacked = fromBase64(padded);
+    return rotateByPreset(unpacked, '99!rt', true);
+  } catch (error) {
+    return null;
+  }
+}
+
+function encodeLetterAsCluster(char, idx) {
+  const lower = char.toLowerCase();
+  const marker = REVERSE_PRESET_MAP[lower] || randomFrom(PRESET_KEYS.slice(0, 5));
+  const leet = LEET_ENCODE_MAP[lower] || lower;
+  const rat = randomRatToken();
+
+  return `${rat}{${idx.toString(36)}:${leet}${SIGNAL_TOKEN}${marker}${randomChars(1)}${randomDigits(2)}}`;
+}
+
+function transformForLayer(source) {
   const words = source.split(/\s+/).filter(Boolean);
 
   return words
@@ -107,7 +128,7 @@ function transformForLayer(source, preset) {
       const encoded = [...word]
         .map((char, idx) => {
           if (/^[a-zA-Z]$/.test(char)) {
-            return encodeLetterAsCluster(char, idx + wordIndex, preset);
+            return encodeLetterAsCluster(char, idx + wordIndex);
           }
           return `${randomRatToken()}[${char.charCodeAt(0).toString(16)}${randomChars(1)}]`;
         })
@@ -121,15 +142,16 @@ function transformForLayer(source, preset) {
 function deTokenizeLayered(value) {
   return value
     .replace(/(RatTT|Rat|RAT|rat|rAt|RaT|RAt|raT)/g, '')
-    .replace(/\|\||::|~~/g, '')
+    .replace(/\|\||::|~~/g, ' ')
     .replace(/\{[0-9a-z]+:([^{}]+?)`329`;;\n''([A-Za-z0-9!#$%]+)[^{}]*\}/g, (_, encodedLetter, marker) => {
       if (PRESET_MAP[marker]) {
         return encodedLetter;
       }
-      return randomFrom(['x', 'q', 'z', 'v']);
+      return '?';
     })
     .replace(/\[[0-9a-f]+[^\]]?\]/g, '')
     .replace(/[0-9]{3}/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -176,8 +198,8 @@ function layerOfObfuscation(source, baseValue) {
     return '';
   }
 
-  const preset = randomFrom(Object.keys(PRESET_MAP).concat(['??!x9', 'rat404', 'mix777']));
-  const transformedSource = transformForLayer(source, preset);
+  const preset = randomFrom(PRESET_KEYS);
+  const transformedSource = transformForLayer(source);
   const merged = `${baseValue}||${transformedSource}`;
   const rotated = rotateByPreset(merged, preset);
   const swapped = byteSwap(rotated, preset);
@@ -188,7 +210,8 @@ function layerOfObfuscation(source, baseValue) {
     .map((chunk, idx) => `${randomRatToken()}[${idx.toString(36)}|${chunk}]${randomChars(1)}${randomDigits(1)}`)
     .join(randomFrom(['#', ';', ':']));
 
-  return `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}${noisy}${randomChars(2)}::preset:${preset}`;
+  const seal = makePresetSeal(preset);
+  return `rat:${randomChars(1)}${randomDigits(4)}${randomChars(2)}${seal}${SIGNAL_TOKEN}${noisy}${randomChars(2)}`;
 }
 
 function runSelectedObfuscation(value, selectedLanguage) {
@@ -215,14 +238,17 @@ function deobfuscateRatOutput(value) {
     return 'Invalid format: expected rat: output.';
   }
 
-  const presetMatch = value.match(/::preset:([^\s]+)$/);
-  if (!presetMatch) {
-    return 'Invalid format: missing preset.';
+  const preset = readPresetSeal(value);
+  if (!preset) {
+    return 'Invalid format: hidden preset signature missing.';
   }
 
-  const preset = presetMatch[1];
-  const payload = value.replace(/^rat:[^\n]*?((?:RatTT|Rat|RAT|rat|rAt|RaT|RAt|raT)\[)/, '$1').replace(/::preset:[^\s]+$/, '');
-  const chunks = [...payload.matchAll(/\[(?:[0-9a-z]+)\|([A-Za-z0-9+/]+)\]/g)].map((m) => m[1]);
+  const afterSignal = value.split(SIGNAL_TOKEN)[1];
+  if (!afterSignal) {
+    return 'Invalid format: missing hard-layer signal section.';
+  }
+
+  const chunks = [...afterSignal.matchAll(/\[(?:[0-9a-z]+)\|([A-Za-z0-9+/]+)\]/g)].map((m) => m[1]);
   const baseOnly = chunks.join('');
 
   if (!baseOnly) {
@@ -237,14 +263,14 @@ function deobfuscateRatOutput(value) {
     const parts = unRotated.split('||');
 
     if (parts.length < 2) {
-      return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered: ${unRotated}`;
+      return `Deobfuscation Access OK\nRecovered: ${unRotated}`;
     }
 
     const rawSourceLayer = parts.slice(1).join('||');
     const tokenizedLetters = deTokenizeLayered(rawSourceLayer);
     const normalized = normalizeLeet(tokenizedLetters);
 
-    return `Deobfuscation Access OK\nPreset: ${preset}\nRecovered source: ${normalized}\nBase payload: ${parts[0]}`;
+    return `Deobfuscation Access OK\nRecovered source: ${normalized}\nBase payload: ${parts[0]}`;
   } catch (error) {
     return 'Deobfuscation failed: payload is too corrupted or not generated by this Ratfuscator version.';
   }
