@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ratfuscator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel">
+        <header class="panel-header">
+          <h1>Ratfuscator</h1>
+          <p>Smooth text obfuscator for classic <code>.txt</code> and <code>.lua</code>.</p>
+        </header>
+
+        <label class="menu-label" for="language">Language preset</label>
+        <select id="language" class="menu-select" aria-label="Select obfuscation language preset">
+          <option value="txt">Classic .txt</option>
+          <option value="lua">.lua</option>
+        </select>
+
+        <div class="editor-grid">
+          <label for="inputText">Input text</label>
+          <textarea id="inputText" placeholder="Insert text to obfuscate..."></textarea>
+
+          <button id="obfuscateBtn" type="button">Obfuscate</button>
+
+          <label for="outputText">Output</label>
+          <textarea id="outputText" readonly placeholder="Your obfuscated result appears here."></textarea>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
