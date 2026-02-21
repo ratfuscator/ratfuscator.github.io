@@ -175,3 +175,22 @@ button:active {
   line-height: 1.4;
   color: #5a2e00;
 }
+
+
+.version-widget {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+}
+
+.version-pill {
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(161, 78, 0, 0.4);
+  background: rgba(255, 248, 215, 0.94);
+  color: #6e3300;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  box-shadow: 0 8px 18px rgba(110, 51, 0, 0.16);
+}
