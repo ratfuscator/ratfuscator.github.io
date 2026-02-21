@@ -261,71 +261,60 @@ function obfuscateLua(value) {
     return '';
   }
 
-  const seedA = Math.floor(Math.random() * 190) + 33;
-  const seedB = Math.floor(Math.random() * 190) + 41;
+  const bytes = [...value].map((char) => char.charCodeAt(0));
+  const encoded = bytes.map((code, index) => ((code + 17 + (index % 13)) ^ 91) & 0xff);
 
-  const tableName = randomLuaIdentifier('tbl');
-  const outName = randomLuaIdentifier('out');
-  const idxName = randomLuaIdentifier('idx');
-  const scratchName = randomLuaIdentifier('bag');
-  const decodeName = randomLuaIdentifier('dec');
+  const chunkRows = [];
+  for (let i = 0; i < encoded.length; i += 20) {
+    chunkRows.push(encoded.slice(i, i + 20).join(','));
+  }
 
-  const triples = encodeLuaSourceToTriples(value, seedA, seedB);
-  const tripleRows = triples
-    .map((triple, index) => `  [${index + 1}] = {${triple[0]},${triple[1]},${triple[2]}}`)
-    .join(',\n');
+  const noiseRows = [];
+  for (let i = 0; i < 260; i += 1) {
+    const a = Math.floor(Math.random() * 9000) + 1000;
+    const b = Math.floor(Math.random() * 9000) + 1000;
+    noiseRows.push(`local v_noise_${i}=(${a}+${b})-(${a})`);
+  }
 
-  const luaNoise = makeLuaNoiseLines(250, scratchName);
+  const payloadRows = chunkRows.map((row, idx) => `  [${idx + 1}]={${row}},`).join('\n');
+  const noiseBlock = noiseRows.join('\n');
 
   return [
-    '-- RATFUSCATOR LUA OBF V3',
-    '-- Roblox-style loader stub with local loadstring/getfenv resolution.',
-    `local ${tableName} = {`,
-    tripleRows,
+    '--[[',
+    ' .____                  ________ ___.    _____                           __                ',
+    ' |    |    __ _______   \\_____  \\_ |___/ ____\\_ __  ______ ____ _____ _/  |_  ___________ ',
+    ' |    |   |  |  \\__  \\   /   |   \\| __ \\   __\\  |  \\/  ___// ___\\__  \\   __\\/  _ \\_  __ \\\\',
+    ' |    |___|  |  // __ \\_/    |    \\ \\_\\ \\  | |  |  /\\___ \\  \\___ / __ \\|  | (  <_> )  | \\/',
+    ' |_______ \\____/(____  /\\_______  /___  /__| |____//____  >\\___  >____  /__|  \\____/|__|   ',
+    '         \\/          \\/         \\/    \\/                \\/     \\/     \\/                   ',
+    '          \\_Welcome to LuaObfuscator.com style RATFUSCATOR loader (v1.1)',
+    ']]--',
+    '',
+    'local v0=tonumber;local v1=string.byte;local v2=string.char;local v3=string.sub;local v4=string.gsub;local v5=string.rep;local v6=table.concat;local v7=table.insert;local v8=math.floor;local v9=getfenv or function() return _G or _ENV; end;local v10=setmetatable;local v11=pcall;local v12=select;local v13=unpack or table.unpack;local v14=loadstring or load;',
+    'local v15={',
+    payloadRows,
     '}',
-    `local ${scratchName} = {}`,
-    luaNoise,
-    'local __bxor = (bit32 and bit32.bxor) or function(a, b)',
-    '  local r, bit = 0, 1',
-    '  while a > 0 or b > 0 do',
-    '    local aa = a % 2',
-    '    local bb = b % 2',
-    '    if aa ~= bb then r = r + bit end',
-    '    a = math.floor(a / 2)',
-    '    b = math.floor(b / 2)',
-    '    bit = bit * 2',
+    noiseBlock,
+    'local function v16(v17)',
+    '  local v18={}',
+    '  for v19=1,#v17 do',
+    '    local v20=v17[v19]',
+    '    for v21=1,#v20 do',
+    '      local v22=v20[v21]',
+    '      local v23=((v22 ~ 91) - 17 - ((#v18) % 13)) % 256',
+    '      v7(v18,v2(v23))',
+    '    end',
     '  end',
-    '  return r',
+    '  return v6(v18)',
     'end',
-    `local function ${decodeName}(triple, i, sa, sb)`,
-    '  local a = triple[1] - 1',
-    '  local b = triple[2] - 1',
-    '  local c = triple[3] - 1',
-    '  local x = (a - sa - ((i - 1) * 7)) % 251',
-    '  local y = (__bxor(__bxor(b, sb), ((i - 1) * 11) % 255)) % 251',
-    '  local z = (c - a - b - sa - sb - (i - 1)) % 251',
-    '  if z ~= x then',
-    '    x = y',
-    '  end',
-    '  return string.char(x)',
-    'end',
-    'local __tc = (table and table.create) or function(n) local t = {} for i = 1, n do t[i] = "" end return t end',
-    `local ${outName} = __tc(#${tableName})`,
-    `for ${idxName} = 1, #${tableName} do`,
-    `  ${outName}[${idxName}] = ${decodeName}(${tableName}[${idxName}], ${idxName}, ${seedA}, ${seedB})`,
-    'end',
-    `local __src = table.concat(${outName})`,
-    'local __env = (getfenv and getfenv()) or _G',
-    'local __ls = (__env and __env.loadstring) or loadstring or load',
-    'if not __ls then',
-    "  error('Ratfuscator Lua payload requires loadstring support (Roblox executor env).')",
-    'end',
-    'local __fn, __err = __ls(__src)',
-    'if not __fn then',
-    "  error('Ratfuscator payload decode error: ' .. tostring(__err))",
-    'end',
-    'if setfenv then pcall(setfenv, __fn, __env) end',
-    'return __fn()',
+    'local v24=v16(v15)',
+    'local v25=v9()',
+    'local v26=(v25 and v25.loadstring) or loadstring or load',
+    'if not v26 then error("Executor missing loadstring/load") end',
+    'local v27,v28=(loadstring and loadstring(v24)) or v26(v24)',
+    'if not v27 then error(v28) end',
+    'if setfenv then v11(setfenv,v27,v25) end',
+    'return v27()',
   ].join('\n');
 }
 
