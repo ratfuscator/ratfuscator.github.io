@@ -228,19 +228,88 @@ function obfuscateTxt(value) {
   return `txt:${salt}:${body}`;
 }
 
+function randomLuaIdentifier(prefix = 'v') {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  const body = Array.from({ length: 9 }, () => randomFrom(alphabet)).join('');
+  return `${prefix}_${body}`;
+}
+
+function encodeLuaSourceToTriples(value, seedA, seedB) {
+  return [...value].map((char, index) => {
+    const code = char.charCodeAt(0);
+    const a = ((code + seedA + index * 7) % 251) + 1;
+    const b = ((code ^ seedB ^ ((index * 11) % 255)) % 251) + 1;
+    const c = (((a + b + code + seedA + seedB + index) % 251) + 1);
+    return [a, b, c];
+  });
+}
+
+function makeLuaNoiseLines(total, bagName) {
+  const lines = [];
+  for (let i = 0; i < total; i += 1) {
+    const n1 = Math.floor(Math.random() * 900) + 100;
+    const n2 = Math.floor(Math.random() * 900) + 100;
+    const n3 = Math.floor(Math.random() * 900) + 100;
+    lines.push(`local __n_${i} = (${n1} + ${n2}) - ${n3}`);
+    lines.push(`if __n_${i} % 2 == 0 then ${bagName}[${i + 1}] = __n_${i} else ${bagName}[${i + 1}] = __n_${i} * -1 end`);
+  }
+  return lines.join('\n');
+}
+
 function obfuscateLua(value) {
   if (!value) {
     return '';
   }
 
-  const escaped = [...value]
-    .map((char, index) => {
-      const code = char.charCodeAt(0) + index;
-      return `\\${code.toString().padStart(3, '0')}`;
-    })
-    .join('');
+  const seedA = Math.floor(Math.random() * 190) + 33;
+  const seedB = Math.floor(Math.random() * 190) + 41;
 
-  return `loadstring("${escaped}")()`;
+  const tableName = randomLuaIdentifier('tbl');
+  const outName = randomLuaIdentifier('out');
+  const idxName = randomLuaIdentifier('idx');
+  const scratchName = randomLuaIdentifier('bag');
+  const decodeName = randomLuaIdentifier('dec');
+
+  const triples = encodeLuaSourceToTriples(value, seedA, seedB);
+  const tripleRows = triples
+    .map((triple, index) => `  [${index + 1}] = {${triple[0]},${triple[1]},${triple[2]}}`)
+    .join(',\n');
+
+  const luaNoise = makeLuaNoiseLines(250, scratchName);
+
+  return [
+    '-- RATFUSCATOR LUA OBF V2',
+    '-- Roblox/Luau compatible wrapper (requires loadstring enabled where applicable).',
+    `local ${tableName} = {`,
+    tripleRows,
+    '}',
+    `local ${scratchName} = {}`,
+    luaNoise,
+    `local function ${decodeName}(triple, i, sa, sb)`,
+    '  local a = triple[1] - 1',
+    '  local b = triple[2] - 1',
+    '  local c = triple[3] - 1',
+    '  local x = (a - sa - ((i - 1) * 7)) % 251',
+    '  local y = (b ~ sb ~ (((i - 1) * 11) % 255)) % 251',
+    '  local z = (c - a - b - sa - sb - (i - 1)) % 251',
+    '  local m = (x + y + z) % 251',
+    '  return string.char(m)',
+    'end',
+    `local ${outName} = table.create(#${tableName})`,
+    `for ${idxName} = 1, #${tableName} do`,
+    `  ${outName}[${idxName}] = ${decodeName}(${tableName}[${idxName}], ${idxName}, ${seedA}, ${seedB})`,
+    'end',
+    `local __src = table.concat(${outName})`,
+    'local __runner = loadstring or load',
+    'if not __runner then',
+    "  error('Ratfuscator Lua payload requires loadstring/load support in this runtime.')",
+    'end',
+    'local __fn, __err = __runner(__src)',
+    'if not __fn then',
+    "  error('Ratfuscator payload decode error: ' .. tostring(__err))",
+    'end',
+    'return __fn()',
+  ].join('\n');
 }
 
 function obfuscateRattify(value) {
